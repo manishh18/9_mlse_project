@@ -1,0 +1,12 @@
+flask>=2.0.0
+werkzeug>=2.0.0
+faiss-cpu>=1.7.4
+numpy>=1.21.0
+sentence-transformers>=2.2.0
+transformers>=4.20.0
+torch>=1.12.0
+diffusers>=0.20.0
+accelerate>=0.20.0
+safetensors>=0.3.0
+pillow>=9.0.0
+

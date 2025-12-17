@@ -1,0 +1,24 @@
+# Python temporary files
+__pycache__/
+*.pyc
+
+# Virtual Environment
+venv/
+env/
+.env
+
+# Large Data & Generated Files
+# (You usually regenerate these or download them, don't push them)
+embeddings/
+data/processed/
+data/generated/
+data/uploads/
+
+# If you want to keep raw text but ignore large files:
+*.bin
+*.npy
+*.pth
+*.safetensors
+
+# System files
+.DS_Store

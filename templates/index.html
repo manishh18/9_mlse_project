@@ -1,0 +1,230 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>RAG Monuments — Demo</title>
+  <style>
+    :root{
+      --bg:#f6f6ff;
+      --card:#ffffff;
+      --muted:#666;
+      --accent:#6c5ce7;
+      --pad:14px;
+    }
+    body{font-family:Inter,ui-sans-serif,system-ui,Segoe UI,Roboto,Helvetica,Arial; background:var(--bg); margin:0; padding:28px; color:#222;}
+    .container{max-width:980px; margin:0 auto;}
+    h1{margin:0 0 8px; font-size:22px;}
+    .row{display:flex; gap:16px; align-items:flex-start; margin-top:18px;}
+    .col{flex:1; background:var(--card); border-radius:10px; padding:var(--pad); box-shadow: 0 6px 18px rgba(25,25,50,0.06); }
+    label{display:block; font-weight:600; margin-bottom:6px;}
+    textarea, input[type="text"], input[type="file"]{width:100%; box-sizing:border-box; padding:10px; border-radius:8px; border:1px solid #e6e6f0;}
+    button{background:var(--accent); color:white; border:none; padding:10px 14px; border-radius:8px; cursor:pointer;}
+    .small{font-size:13px; color:var(--muted);}
+    .result {margin-top:12px; padding:12px; background:#fbfbff; border-radius:8px; border:1px solid #efefff;}
+    .chunk{background:#fff; padding:8px; margin-bottom:8px; border-radius:6px; border:1px solid #f0f0fb;}
+    .img-preview{max-width:100%; border-radius:8px; margin-top:8px; border:1px solid #eee;}
+    .two{display:grid; grid-template-columns:1fr 1fr; gap:12px}
+    @media (max-width:880px){ .row{flex-direction:column} .two{grid-template-columns:1fr} }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>RAG — Indian Monuments (Demo)</h1>
+    <p class="small">Ask about monuments, upload images to analyze, or generate images. (Local models only.)</p>
+
+    <div class="row">
+      <div class="col">
+        <h3>Ask (text → answer)</h3>
+        <label for="question">Question</label>
+        <textarea id="question" placeholder="e.g. When was the Taj Mahal built and by whom?"></textarea>
+        <div style="margin-top:8px;">
+          <button id="askBtn">Ask</button>
+        </div>
+
+        <div id="askResult" class="result" style="display:none;">
+          <h4>Answer</h4>
+          <div id="askAnswer"></div>
+          <h5>Retrieved Chunks</h5>
+          <div id="askChunks"></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <h3>Image → Answer</h3>
+        <label for="imgfile">Upload image</label>
+        <input id="imgfile" type="file" accept="image/*" />
+        <div style="margin-top:8px;">
+          <button id="imgBtn">Analyze Image</button>
+        </div>
+
+        <div id="imgResult" class="result" style="display:none;">
+          <h4>Caption</h4>
+          <div id="imgCaption"></div>
+          <h4>Answer</h4>
+          <div id="imgAnswer"></div>
+          <h5>Top Chunks</h5>
+          <div id="imgChunks"></div>
+          <div id="uploadedPreview"></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row" style="margin-top:20px;">
+      <div class="col">
+        <h3>Generate Image (text → image)</h3>
+        <label for="genprompt">Prompt</label>
+        <input id="genprompt" type="text" placeholder="e.g. Taj Mahal at sunrise, watercolor painting, soft light" />
+        <div style="margin-top:8px;">
+          <button id="genBtn">Generate</button>
+        </div>
+
+        <div id="genResult" class="result" style="display:none;">
+          <h4>Generated Image</h4>
+          <div id="genImageWrap"></div>
+        </div>
+      </div>
+
+      <div class="col">
+        <h3>Quick Tips</h3>
+        <div class="small">
+          <ul>
+            <li>For image analysis, upload a clear photo of the monument.</li>
+            <li>Text generation uses your local LLM; if it's slow, generation runs on CPU/MPS — be patient.</li>
+            <li>Image generation uses your local Stable Diffusion model (first run downloads the model).</li>
+            <li>If server returns errors, check the terminal where you launched the Flask app for tracebacks.</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+<script>
+function safeText(s){ return (s||"").toString(); }
+
+// Helper to render chunks
+function renderChunks(container, chunks){
+  container.innerHTML = "";
+  if(!chunks || chunks.length === 0){
+    container.innerHTML = "<div class='small'>No chunks returned.</div>";
+    return;
+  }
+  chunks.forEach(c => {
+    const w = document.createElement("div");
+    w.className = "chunk";
+    const title = c.title || c.t || "";
+    const id = c.id || "";
+    const txt = (c.text || c.snippet || "").replace(/\\n/g," ");
+    w.innerHTML = `<strong>${id} — ${title}</strong><div class="small">${txt}</div>`;
+    container.appendChild(w);
+  });
+}
+
+// ASK button
+document.getElementById("askBtn").addEventListener("click", async () => {
+  const q = document.getElementById("question").value.trim();
+  if(!q){ alert("Please type a question"); return; }
+  document.getElementById("askResult").style.display = "block";
+  document.getElementById("askAnswer").innerText = "Thinking...";
+  document.getElementById("askChunks").innerHTML = "";
+
+  try{
+    const res = await fetch("/ask", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({question: q})
+    });
+    const j = await res.json();
+    if(!res.ok){ document.getElementById("askAnswer").innerText = "Error: " + (j.error || JSON.stringify(j)); return; }
+
+    // Support different shapes of response:
+    // 1) {question, answer, retrieved}
+    // 2) {answer: "...", retrieved: [...]}
+    // 3) rag_query may return {answer:..., retrieved:...} or [answer, retrieved]
+    let answer = j.answer || j.result || j;
+    if(typeof answer === "object" && answer !== null){
+       // maybe rag_query returned dict; try to pull "answer"
+       answer = answer.answer || JSON.stringify(answer);
+    }
+    // fallback if rag_query returned tuple [ans, retrieved]
+    if(!answer && Array.isArray(j) && j.length>0) answer = j[0];
+
+    // retrieved
+    let retrieved = j.retrieved || j[1] || (Array.isArray(j) ? j.slice(1) : null) || [];
+    if(!Array.isArray(retrieved) && typeof retrieved === "object") retrieved = [retrieved];
+
+    document.getElementById("askAnswer").innerText = safeText(answer);
+    renderChunks(document.getElementById("askChunks"), retrieved);
+  }catch(err){
+    document.getElementById("askAnswer").innerText = "Request failed: " + err;
+  }
+});
+
+// IMAGE upload
+document.getElementById("imgBtn").addEventListener("click", async () => {
+  const fileInput = document.getElementById("imgfile");
+  if(!fileInput.files || fileInput.files.length === 0){ alert("Choose an image file"); return; }
+  const file = fileInput.files[0];
+
+  // show preview
+  const reader = new FileReader();
+  reader.onload = function(e){
+    document.getElementById("uploadedPreview").innerHTML = `<img class="img-preview" src="${e.target.result}">`;
+  };
+  reader.readAsDataURL(file);
+
+  const fd = new FormData();
+  fd.append("file", file);
+
+  document.getElementById("imgResult").style.display = "block";
+  document.getElementById("imgCaption").innerText = "Analyzing image...";
+  document.getElementById("imgAnswer").innerText = "";
+
+  try{
+    const res = await fetch("/upload-image", { method: "POST", body: fd });
+    const j = await res.json();
+    if(!res.ok){ document.getElementById("imgCaption").innerText = "Error: " + (j.error || JSON.stringify(j)); return; }
+
+    // expected: { caption, answer, retrieved or chunks or fused_chunks }
+    const caption = j.caption || j.cap || "";
+    const answer = j.answer || j.result || "";
+    let chunks = j.retrieved || j.chunks || j.fused_chunks || j.caption_chunks || [];
+    if(!Array.isArray(chunks) && chunks) chunks = [chunks];
+
+    document.getElementById("imgCaption").innerText = safeText(caption);
+    document.getElementById("imgAnswer").innerText = safeText(answer);
+    renderChunks(document.getElementById("imgChunks"), chunks);
+  }catch(err){
+    document.getElementById("imgCaption").innerText = "Request failed: " + err;
+  }
+});
+
+// GENERATE image
+document.getElementById("genBtn").addEventListener("click", async () => {
+  const prompt = document.getElementById("genprompt").value.trim();
+  if(!prompt){ alert("Type a prompt"); return; }
+  document.getElementById("genResult").style.display = "block";
+  document.getElementById("genImageWrap").innerText = "Generating image... (this may take time)";
+
+  try{
+    const res = await fetch("/gen-image", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({prompt: prompt})
+    });
+    if(!res.ok){
+      const txt = await res.text();
+      document.getElementById("genImageWrap").innerText = "Error: " + txt;
+      return;
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    document.getElementById("genImageWrap").innerHTML = `<img class="img-preview" src="${url}">`;
+  }catch(err){
+    document.getElementById("genImageWrap").innerText = "Request failed: " + err;
+  }
+});
+</script>
+</body>
+</html>

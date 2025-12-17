@@ -102,15 +102,12 @@ pip install -r requirements.txt
 ```
 Note: This project uses PyTorch. Ensure you have the correct version installed for your hardware (CUDA/MPS/CPU).
 
-### Team Members Section
-
-```markdown
 ## 👥 Team Members
 
 | Name | Student ID |
-| :--- | :--- |
-| **Darshita Dwivedi** | 202418013 |
-| **Manish** | 202418030 |
-| **Meet Panchal** | 202418042 |
-| **Ujjwal Bhansali** | 202418058 |
-```
+|------|------------|
+| Darshita Dwivedi | 202418013 |
+| Manish | 202418030 |
+| Meet Panchal | 202418042 |
+| Ujjwal Bhansali | 202418058 |
+

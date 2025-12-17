@@ -1,3 +1,12 @@
+## 👥 Team Members
+
+| Name | Student ID |
+|------|------------|
+| Darshita Dwivedi | 202418013 |
+| Manish | 202418030 |
+| Meet Panchal | 202418042 |
+| Ujjwal Bhansali | 202418058 |
+
 # Monument Storyteller RAG 🏛️✨
 
 **Monument Storyteller** is a local, privacy-focused Multimodal Retrieval-Augmented Generation (RAG) system designed to bring historical monuments to life. It combines natural language processing, computer vision, and generative AI to answer questions, analyze uploaded images of monuments, and generate artistic visualizations of heritage sites.
@@ -114,12 +123,5 @@ Navigate to the `notebooks/` directory and execute the pipeline in order:
 ```bash
 python app.py
 ```
-## 👥 Team Members
 
-| Name | Student ID |
-|------|------------|
-| Darshita Dwivedi | 202418013 |
-| Manish | 202418030 |
-| Meet Panchal | 202418042 |
-| Ujjwal Bhansali | 202418058 |
 
